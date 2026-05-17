@@ -48,7 +48,7 @@ This table is the source of truth. Anywhere else (plans, READMEs, comments) that
 | AWS region | User's choice | No region-locked assumptions in code. |
 | GR00T base image | `nvcr.io/nvidia/pytorch:25.01-py3` | Provides CUDA 12.8 / Python 3.10. Confirm tag at build time. |
 | Isaac-GR00T | `23ace64f17aa5015259b8609d371eb61a357c776` (tag `n1.7-release`) | https://github.com/NVIDIA/Isaac-GR00T |
-| Hugging Face model | `nvidia/GR00T-N1.7-3B` | Pulled into the EBS cache by `pull_assets.sh` (TBD). |
+| Hugging Face model | `nvidia/GR00T-N1.7-3B` | Pulled into the EBS cache by [`scripts/pull_assets.sh`](scripts/pull_assets.sh). |
 | Embodiment tag | `LIBERO_PANDA` | GR00T was trained on LIBERO data; behavior on a fresh Isaac scene will be distribution-shifted. Pipeline success ≠ task success. |
 | pyzmq / msgpack | 27.0.1 / 1.1.0 | Driven by GR00T's own `uv sync`. Match in the Isaac-side client so framing is byte-identical. |
 | Python (GR00T container) | 3.10 | From the NGC PyTorch base. |
@@ -56,7 +56,7 @@ This table is the source of truth. Anywhere else (plans, READMEs, comments) that
 
 ## Wire protocol
 
-GR00T's `gr00t/policy/server_client.py` is the canonical implementation. Our client (`src/shared/zmq_protocol.py`, TBD) must mirror it byte-for-byte:
+GR00T's `gr00t/policy/server_client.py` is the canonical implementation. A frozen snapshot at the pinned commit lives at [`docs/references/upstream-server-client.py`](docs/references/upstream-server-client.py); our client at [`src/shared/zmq_protocol.py`](src/shared/zmq_protocol.py) mirrors it byte-for-byte on the encode side and is exercised by `tests/test_zmq_protocol.py`:
 
 - **Transport:** ZMQ REQ/REP over TCP. Server binds; client connects.
 - **Framing:** msgpack with a custom `np.ndarray` extension type (`__ndarray_class__` / `as_npy`). Not pickle. Not raw numpy.
@@ -67,9 +67,9 @@ GR00T's `gr00t/policy/server_client.py` is the canonical implementation. Our cli
 
 If you change anything here, verify against the pinned Isaac-GR00T commit, not against memory or against `main`.
 
-## Repository layering (target — most does not exist yet)
+## Repository layering (target — `src/client/`, `docker/`, `configs/` still 🟡)
 
-The repo will divide into a small number of layers with one-way dependencies. None of this is enforced by lints today; it's the model we're building toward.
+The repo divides into a small number of layers with one-way dependencies. None of this is enforced by lints today; it's the model we're building toward. `src/shared/` and `scripts/` exist; `tests/` is a sibling of `src/` exercising the wire protocol in-process.
 
 ```
 configs/   ──► src/shared/    ──► src/client/   ──► docker/   ──► docker-compose.aws.yml

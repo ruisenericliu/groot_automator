@@ -9,8 +9,8 @@
 
 The repo currently exists in two layers:
 
-- **Docs scaffolding (done, uncommitted):** `CLAUDE.md`, `ARCHITECTURE.md`, a substantive `README.md`, and `docs/exec-plans/{active,completed}/`. All three top-level docs already describe the AWS + Isaac Automator design. The Runpod build was abandoned before bring-up; its two plans are preserved under `docs/exec-plans/completed/` as historical context.
-- **Code, configs, deployment glue (none of it written yet):** no `src/`, `configs/`, `docker/`, `scripts/`, `docker-compose.aws.yml`, `.env.example`, or `pyproject.toml`. `AWS_SETUP.md` exists (pre-deploy walkthrough) but its post-deploy details section is still `TBD`.
+- **Docs scaffolding (committed):** `CLAUDE.md`, `ARCHITECTURE.md`, a substantive `README.md`, `AWS_SETUP.md`, and `docs/exec-plans/{active,completed}/`. All four top-level docs already describe the AWS + Isaac Automator design. The Runpod build was abandoned before bring-up; the retired AWS-migration plan is preserved under `docs/exec-plans/completed/` as historical context (the older Runpod-specific plans were deleted).
+- **Code, configs, deployment glue (B.1 + B.2 committed; B.3 + B.4 still 🟡):** wire protocol, env baseline, scripts, and tests are in. Still missing: `docker-compose.aws.yml`, `docker/groot/`, `src/client/run_inference.py`, `src/client/scenes/tabletop_panda.py`, `configs/tabletop_panda.yaml`. `AWS_SETUP.md`'s post-deploy details section is still `TBD`.
 
 The previous active plan (`aws-isaac-automator-migration.md`) was written when the working repo name was `runpod_isaac` / `groot_isaac`. This repo is `groot_automator`. The migration plan's phases are still substantively right, but its paths, its assumptions about pre-existing code (`src/shared/zmq_protocol.py`, `docker/groot/`, etc. — none of which actually exist), and its Phase E doc-cleanup (largely already done) need replacing.
 
@@ -41,7 +41,7 @@ groot_automator/
 ├── AWS_SETUP.md                           ✅ pre-deploy walkthrough exists; post-deploy "values captured" section still TBD
 ├── LICENSE                                ✅
 ├── .env.example                           ✅ NGC_API_KEY, HF_TOKEN, ACCEPT_EULA=Y, PRIVACY_CONSENT=Y
-├── .gitignore                              ✅ ignores .venv/, .env, caches, outputs/
+├── .gitignore                             ✅ ignores .venv/, .env, caches, outputs/
 ├── pyproject.toml                         ✅ ruff config (py310 target, line length 100); no runtime deps
 ├── docker-compose.aws.yml                 🟡 single service: groot-server, --gpus all, -p 127.0.0.1:5555:5555
 ├── docker/
@@ -120,7 +120,7 @@ The user wants pause-for-confirmation between phases.
 ### Phase A — Isaac Automator dry-run on AWS
 
 - On Mac: `git clone https://github.com/isaac-sim/IsaacAutomator && cd IsaacAutomator && git checkout 685bc29e677714a7f0f72131e2d30eb9b9db2ce7 && ./build`. (The pinned SHA is the first commit after the NoMachine install fix; recorded in `ARCHITECTURE.md`.)
-- `./run ./deploy-aws --isaaclab no --isaaclab-arena no` — IA prompts for AWS creds the first time and stores them in `state/`; no `~/.aws` mount needed. Default instance `g6e.2xlarge`, default region `us-east-1`. Override with `--ec2-instance-type` only if cost forces it.
+- `./run ./deploy-aws --isaaclab no --isaaclab-arena no --region us-west-2` — IA prompts for AWS creds the first time and stores them in `state/`; no `~/.aws` mount needed. Default instance `g6e.2xlarge`; we explicitly pass `--region us-west-2` because that's where our quota request is filed (see `AWS_SETUP.md` step 3). Override the instance with `--ec2-instance-type g5.2xlarge` only if cost forces it.
 - Connect via NoMachine from the Mac NoMachine client using the IP + port in `state/<name>/info.txt`. Confirm Isaac Sim editor opens.
 - `./run ./stop <name>` then `./run ./start <name>` — confirm pause/resume.
 - Write `AWS_SETUP.md` capturing install path, NoMachine port, noVNC URL, and any deltas vs the IA README we hit.
@@ -175,7 +175,7 @@ Reason for deferral: every `isaacsim.*` import is a guess until we can `~/IsaacS
 - `./run ./ssh <deployment-name>` from the IA repo on the Mac; on the workstation: `git clone <this-repo> ~/workspace/groot_automator && cd ~/workspace/groot_automator`.
 - `cp .env.example .env` and fill `NGC_API_KEY`, `HF_TOKEN`.
 - `docker compose -f docker-compose.aws.yml up -d groot-server`. Watch `docker compose logs -f groot-server`; expect model loaded in 30–60 s on subsequent runs.
-- Sanity: `python -c "from src.shared.zmq_protocol import PolicyClient; print(PolicyClient('127.0.0.1').ping())"` → `pong`.
+- Sanity: `python -c "from src.shared.zmq_protocol import PolicyClient; print(PolicyClient('127.0.0.1').ping())"` → `True` (the ping handler returns `{"status": "ok", "message": "Server is running"}`; our `PolicyClient.ping()` collapses that to a bool).
 - `~/IsaacSim/python.sh src/client/run_inference.py --server-host 127.0.0.1`. Expect MP4 at `/workspace/outputs/rollout_<timestamp>.mp4`. `scp` it to the Mac; play it.
 
 ### Phase D — Live viewport via NoMachine
@@ -198,7 +198,7 @@ End-to-end on a fresh Mac, against a fresh AWS deployment:
 
 1. `./deploy-aws --isaaclab no --isaaclab-arena no` completes; `state/<name>/info.txt` lists public IP, NoMachine port, noVNC URL.
 2. NoMachine session from the Mac brings up the Ubuntu desktop; Isaac Sim editor opens, no driver errors.
-3. `docker compose -f docker-compose.aws.yml up -d groot-server` on the workstation; `PolicyClient('127.0.0.1').ping()` → `pong`.
+3. `docker compose -f docker-compose.aws.yml up -d groot-server` on the workstation; `PolicyClient('127.0.0.1').ping()` returns `True`.
 4. `~/IsaacSim/python.sh src/client/run_inference.py --server-host 127.0.0.1` exits 0; MP4 at `/workspace/outputs/`.
 5. `scp` MP4 to Mac; plays; Franka visibly moves under GR00T action commands.
 6. With `--live` (`headless=False`), the same run is visible in the NoMachine session.

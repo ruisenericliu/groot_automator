@@ -8,9 +8,9 @@ A harness for running **NVIDIA GR00T N1.7 inference inside Isaac Sim 5.0.0** on 
 
 ## Current state — read before doing anything
 
-**The repo is currently docs-only.** `LICENSE`, `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`, and `docs/` are all that exist. There is no `src/`, no `docker/`, no `scripts/`, no `docker-compose.aws.yml`, no `.env.example`, no `pyproject.toml`. An earlier Runpod build was scoped but never executed; it was superseded by the AWS + Isaac Automator design before bring-up, and its plans have since been deleted. Do not assume any file mentioned in the retired AWS-migration plan exists; verify with `ls` first.
+**Phase B.1 + B.2 landed.** The repo now has the wire protocol (`src/shared/zmq_protocol.py` + tests), the `.env.example` / `pyproject.toml` / `.gitignore` baseline, and the three thin scripts (`start_groot.sh`, `pull_assets.sh`, `autorun.sh`). Still 🟡: `docker-compose.aws.yml`, `docker/groot/`, `src/client/run_inference.py`, `src/client/scenes/tabletop_panda.py`, `configs/tabletop_panda.yaml`, and the post-deploy section of `AWS_SETUP.md`. An earlier Runpod build was scoped but never executed; it was superseded by the AWS + Isaac Automator design before bring-up, and its plans have since been deleted.
 
-The current source of truth for what we're building is **[`docs/exec-plans/active/completed-structure.md`](docs/exec-plans/active/completed-structure.md)** — read it before proposing changes. The retired AWS-migration plan under `docs/exec-plans/completed/` is historical context that explains the same delta from a Runpod-build vantage; the new plan is the live one.
+The current source of truth for what we're building is **[`docs/exec-plans/active/completed-structure.md`](docs/exec-plans/active/completed-structure.md)** — read it (especially the file tree with ✅/🟡 markers) before proposing changes. The retired AWS-migration plan under `docs/exec-plans/completed/` is historical context that explains the same delta from a Runpod-build vantage; the new plan is the live one.
 
 ## Operating principles (agent-first harness)
 
@@ -29,17 +29,32 @@ We are intentionally following the OpenAI Codex "harness engineering" model: hum
 ├── CLAUDE.md                              (this file — ToC for agents)
 ├── ARCHITECTURE.md                        (system map, pin table, wire-protocol summary)
 ├── README.md                              (human-facing quickstart)
+├── AWS_SETUP.md                           (pre-deploy walkthrough; post-deploy section still TBD)
 ├── LICENSE
+├── .env.example                           (NGC_API_KEY, HF_TOKEN, ACCEPT_EULA, PRIVACY_CONSENT)
+├── .gitignore
+├── pyproject.toml                         (ruff config; py310, line length 100)
+├── src/
+│   ├── shared/
+│   │   └── zmq_protocol.py                (client mirror of gr00t/policy/server_client.py)
+│   └── client/                            (scenes/, run_inference.py — 🟡 B.4)
+├── tests/
+│   └── test_zmq_protocol.py
+├── scripts/
+│   ├── start_groot.sh                     (docker compose up wrapper; needs B.3's compose file)
+│   ├── pull_assets.sh                     (HF model cache primer)
+│   └── autorun.sh                         (IA boot hook → start_groot.sh)
 └── docs/
     ├── exec-plans/
     │   ├── active/
     │   │   └── completed-structure.md     ← READ THIS FIRST
     │   └── completed/
     │       └── aws-isaac-automator-migration.md  (retired; superseded by completed-structure.md)
-    └── references/                         (empty placeholder)
+    └── references/
+        └── upstream-server-client.py      (frozen snapshot at the pinned GR00T commit)
 ```
 
-Files the active plan calls for but **do not exist yet**: `src/`, `configs/`, `docker/groot/`, `docker-compose.aws.yml`, `scripts/start_groot.sh`, `.env.example`, `pyproject.toml`. The post-deploy details section of `AWS_SETUP.md` still has `TBD` placeholders until Phase A lands.
+Files the active plan calls for but **do not exist yet**: `docker-compose.aws.yml`, `docker/groot/Dockerfile`, `docker/groot/entrypoint.sh`, `src/client/run_inference.py`, `src/client/scenes/tabletop_panda.py`, `configs/tabletop_panda.yaml`. The post-deploy details section of `AWS_SETUP.md` still has `TBD` placeholders until Phase A lands.
 
 ## Target architecture (delta only — full picture in the active plan)
 
@@ -55,7 +70,9 @@ Mac (dev machine)  --NoMachine TCP-->  AWS workstation VM (Isaac Automator-provi
 - **Single GPU host.** Default `g6e.2xlarge` (L40S, 48 GB) — matches Isaac Automator's upstream default and is AWS's closest data-center sibling to the RTX 6000 Ada. `g5.2xlarge` (A10G, 24 GB) is the cheaper fallback. Multi-GPU is out of scope.
 - **Localhost ZMQ.** Isaac talks to GR00T at `127.0.0.1:5555`. No compose bridge network in the new design.
 
-## Pinned versions (canonical; mirror in `ARCHITECTURE.md` once it exists)
+## Pinned versions (digest — `ARCHITECTURE.md` is canonical)
+
+Anywhere a version is named, it must agree with the canonical table in [`ARCHITECTURE.md`](ARCHITECTURE.md). This digest is for fast lookup.
 
 | Component | Pin |
 |---|---|
@@ -69,10 +86,13 @@ Mac (dev machine)  --NoMachine TCP-->  AWS workstation VM (Isaac Automator-provi
 
 ## Commands
 
-There are no project-specific build, lint, or test commands yet — the code hasn't been written. Once `pyproject.toml` lands, expect:
+Mac-side (run inside the repo's `.venv`):
 
-- `ruff check .` — Mac-side lint (target py310, line length 100 per the original plan).
-- `python -c "import ast; ast.parse(open('<path>').read())"` — Mac-side syntax check for files we can't run locally.
+- `.venv/bin/ruff check .` — lint (target py310, line length 100; `docs/references/upstream-server-client.py` is excluded — it's a frozen snapshot).
+- `.venv/bin/ruff format --check .` — format check.
+- `.venv/bin/python -m pytest tests/ --timeout=10` — unit tests (currently just the wire-protocol round-trip).
+- `.venv/bin/shellcheck scripts/*.sh` — shell lint.
+- `python -c "import ast; ast.parse(open('<path>').read())"` — syntax check for `isaacsim`-importing files we can't run locally.
 
 End-to-end runs happen **on the AWS workstation**, not on the Mac:
 

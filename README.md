@@ -2,7 +2,7 @@
 
 Run [NVIDIA GR00T N1.7](https://github.com/NVIDIA/Isaac-GR00T) inference inside [Isaac Sim 5.0.0](https://docs.isaacsim.omniverse.nvidia.com/5.0.0/index.html) on an AWS GPU workstation provisioned by [Isaac Automator](https://github.com/isaac-sim/IsaacAutomator), driven from a MacBook Air. The workstation's Isaac Sim viewport is reachable from the Mac over [NoMachine](https://www.nomachine.com/) (TCP), so you can author scenes and watch policies live; the same scenes also produce MP4 rollouts headlessly.
 
-> **Status — early scaffolding.** Only documentation exists today. The Mac-side workflow below describes the target. The repo's current shape and the path to "first rollout" is tracked in [`docs/exec-plans/active/completed-structure.md`](docs/exec-plans/active/completed-structure.md). New contributors (human or agent) should read [`CLAUDE.md`](CLAUDE.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md) first.
+> **Status — wire protocol + scaffolding landed; container + Isaac driver still to come.** The ZMQ client, env baseline, scripts, and tests ship; the GR00T container (`docker-compose.aws.yml` + `docker/groot/`) and the Isaac client (`src/client/run_inference.py` + scene) are the next two chunks. The Mac-side workflow below describes the full target. Path to "first rollout" lives in [`docs/exec-plans/active/completed-structure.md`](docs/exec-plans/active/completed-structure.md). New contributors (human or agent) should read [`CLAUDE.md`](CLAUDE.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md) first.
 
 ## Why this exists
 
@@ -20,7 +20,7 @@ Upstream Isaac Automator handles the AWS lifecycle (Terraform + Ansible, NoMachi
 **On the Mac:**
 
 - Docker Desktop (for building/running the Isaac Automator deployer container locally).
-- An [NVIDIA NGC](https://ngc.nvidia.com/) account + API key (`NGC_API_KEY`) — needed for the GR00T base image and Isaac Sim assets.
+- An [NVIDIA NGC](https://ngc.nvidia.com/) account + API key (`NGC_API_KEY`) — used by `docker login nvcr.io` on the workstation to pull the GR00T base image. Isaac Automator handles its own NGC prompt for the Isaac Sim install.
 - A [Hugging Face](https://huggingface.co/) account + token (`HF_TOKEN`) with access accepted for [`nvidia/GR00T-N1.7-3B`](https://huggingface.co/nvidia/GR00T-N1.7-3B).
 - An AWS account whose IAM principal has `AmazonEC2FullAccess` (plus quota for a `g6e.2xlarge` (L40S, 48 GB — upstream IA default) in your region of choice; `g5.2xlarge` (A10G) is the cheaper fallback). Isaac Automator prompts for AWS credentials interactively the first time you run `./deploy-aws` and stores them inside its `state/` directory — it does **not** read `~/.aws/credentials` from the host.
 - The [NoMachine client for macOS](https://www.nomachine.com/download).
@@ -39,8 +39,8 @@ cd IsaacAutomator
 git checkout 685bc29e677714a7f0f72131e2d30eb9b9db2ce7   # see ARCHITECTURE.md pin table
 ./build                                                 # equivalent to `docker build -t isaac_automator .`
 
-# 2. Deploy a minimal Isaac-Sim-only workstation on AWS (g6e.2xlarge / L40S, us-east-1 by default).
-./run ./deploy-aws --isaaclab no --isaaclab-arena no
+# 2. Deploy a minimal Isaac-Sim-only workstation on AWS (g6e.2xlarge / L40S in us-west-2 — see AWS_SETUP.md for the quota dance).
+./run ./deploy-aws --isaaclab no --isaaclab-arena no --region us-west-2
 
 #    Capture the deployment name, public IP, NoMachine port from state/<name>/info.txt.
 
@@ -51,11 +51,11 @@ git checkout 685bc29e677714a7f0f72131e2d30eb9b9db2ce7   # see ARCHITECTURE.md pi
 ./run ./ssh <deployment-name>
 # now on the workstation:
 git clone <this-repo> ~/workspace/groot_automator && cd ~/workspace/groot_automator
-cp .env.example .env   # paste NGC_API_KEY, HF_TOKEN          # (not yet wired)
-docker compose -f docker-compose.aws.yml up -d groot-server   # (not yet wired)
+cp .env.example .env   # paste NGC_API_KEY, HF_TOKEN
+docker compose -f docker-compose.aws.yml up -d groot-server   # (B.3 — compose file not yet committed)
 
 # 5. Headless rollout — produces an MP4.
-~/IsaacSim/python.sh src/client/run_inference.py --server-host 127.0.0.1   # (not yet wired)
+~/IsaacSim/python.sh src/client/run_inference.py --server-host 127.0.0.1   # (B.4 — entry script not yet committed)
 # expect /workspace/outputs/rollout_<timestamp>.mp4
 
 # 6. Live rollout — same script with headless=False, watched over NoMachine.
@@ -76,16 +76,25 @@ docker run --rm -it -v $(pwd)/state:/root/state isaac_automator ./stop <deployme
 .
 ├── CLAUDE.md                  ← agent-first operating principles + ToC (read first)
 ├── ARCHITECTURE.md            ← system map, pin table, wire-protocol summary
+├── AWS_SETUP.md               ← pre-deploy walkthrough (post-deploy section TBD)
 ├── README.md                  ← this file
 ├── LICENSE
+├── .env.example               ← NGC_API_KEY, HF_TOKEN, ACCEPT_EULA, PRIVACY_CONSENT
+├── pyproject.toml             ← ruff config (py310, line length 100)
+├── src/
+│   ├── shared/zmq_protocol.py ← ZMQ client mirror of GR00T's server_client.py
+│   └── client/                ← Isaac Sim driver (scene + run_inference — coming in B.4)
+├── tests/                     ← in-process round-trip tests for the wire protocol
+├── scripts/                   ← thin orchestration: start_groot, pull_assets, autorun
 └── docs/
     ├── exec-plans/
     │   ├── active/            ← live plans driving current work
     │   └── completed/         ← retired plans (Runpod build plans were deleted; retired AWS migration plan lives here)
-    └── references/            ← archived setup guides and external pointers
+    └── references/
+        └── upstream-server-client.py   ← frozen snapshot of the pinned GR00T wire protocol
 ```
 
-Things the active plan calls for that **don't exist yet**: `src/`, `configs/`, `docker/groot/`, `docker-compose.aws.yml`, `scripts/`, `.env.example`, `pyproject.toml`. `AWS_SETUP.md` exists but the post-deploy details section is still `TBD` until the first successful deploy lands.
+Things the active plan calls for that **don't exist yet**: `docker-compose.aws.yml`, `docker/groot/Dockerfile`, `docker/groot/entrypoint.sh`, `src/client/run_inference.py`, `src/client/scenes/tabletop_panda.py`, `configs/tabletop_panda.yaml`. `AWS_SETUP.md` exists but the post-deploy details section is still `TBD` until the first successful deploy lands.
 
 ## Cost discipline
 
