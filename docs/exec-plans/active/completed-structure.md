@@ -40,30 +40,34 @@ groot_automator/
 ├── README.md                              ✅ quickstart for humans
 ├── AWS_SETUP.md                           ✅ pre-deploy walkthrough exists; post-deploy "values captured" section still TBD
 ├── LICENSE                                ✅
-├── .env.example                           🟡 NGC_API_KEY, HF_TOKEN, ACCEPT_EULA=Y, PRIVACY_CONSENT=Y
-├── pyproject.toml                         🟡 ruff config (py310 target, line length 100); no runtime deps
+├── .env.example                           ✅ NGC_API_KEY, HF_TOKEN, ACCEPT_EULA=Y, PRIVACY_CONSENT=Y
+├── .gitignore                              ✅ ignores .venv/, .env, caches, outputs/
+├── pyproject.toml                         ✅ ruff config (py310 target, line length 100); no runtime deps
 ├── docker-compose.aws.yml                 🟡 single service: groot-server, --gpus all, -p 127.0.0.1:5555:5555
 ├── docker/
 │   └── groot/
 │       ├── Dockerfile                     🟡 FROM nvcr.io/nvidia/pytorch:25.01-py3 + Isaac-GR00T @ pinned commit
 │       └── entrypoint.sh                  🟡 launches gr00t.eval.run_gr00t_server
 ├── src/
-│   ├── __init__.py                        🟡
+│   ├── __init__.py                        ✅
 │   ├── shared/
-│   │   ├── __init__.py                    🟡
-│   │   └── zmq_protocol.py                🟡 byte-for-byte mirror of gr00t/policy/server_client.py
+│   │   ├── __init__.py                    ✅
+│   │   └── zmq_protocol.py                ✅ client mirror of gr00t/policy/server_client.py
 │   └── client/
-│       ├── __init__.py                    🟡
+│       ├── __init__.py                    ✅
 │       ├── run_inference.py               🟡 native ~/IsaacSim/python.sh entry; --server-host 127.0.0.1 default
 │       └── scenes/
-│           ├── __init__.py                🟡
+│           ├── __init__.py                ✅
 │           └── tabletop_panda.py          🟡 Franka + tabletop, hits isaacsim.* APIs
+├── tests/
+│   ├── __init__.py                        ✅
+│   └── test_zmq_protocol.py               ✅ in-process REQ/REP round-trip (7 tests, pytest-timeout)
 ├── configs/
 │   └── tabletop_panda.yaml                🟡 read at process start by run_inference.py; never imports Python
 ├── scripts/
-│   ├── start_groot.sh                     🟡 thin wrapper: docker compose -f docker-compose.aws.yml up -d
-│   ├── pull_assets.sh                     🟡 HF cache primer for nvidia/GR00T-N1.7-3B
-│   └── autorun.sh                         🟡 Isaac Automator boot hook (calls start_groot.sh)
+│   ├── start_groot.sh                     ✅ thin wrapper: docker compose -f docker-compose.aws.yml up -d
+│   ├── pull_assets.sh                     ✅ HF cache primer for nvidia/GR00T-N1.7-3B
+│   └── autorun.sh                         ✅ Isaac Automator boot hook (calls start_groot.sh)
 └── docs/
     ├── exec-plans/
     │   ├── active/
@@ -73,7 +77,7 @@ groot_automator/
     └── references/                         (empty placeholder; the Runpod plans + walkthrough were deleted as no longer useful)
 ```
 
-**Net work remaining:** every 🟡 file. Counting: 5 deployment-glue files (`.env.example`, `pyproject.toml`, `docker-compose.aws.yml`, the two `docker/groot/` files), 4 source files + their `__init__.py`s, 1 config, 3 scripts, 1 doc (`AWS_SETUP.md`). ~18 files total, almost all small.
+**Net work remaining (🟡 only):** `docker-compose.aws.yml`, `docker/groot/Dockerfile`, `docker/groot/entrypoint.sh`, `src/client/run_inference.py`, `src/client/scenes/tabletop_panda.py`, `configs/tabletop_panda.yaml`, and the post-deploy section of `AWS_SETUP.md`. 7 files; B.3 owns the docker trio, B.4 owns the Isaac trio + config.
 
 ## Target end-state — runtime architecture
 
@@ -123,17 +127,48 @@ The user wants pause-for-confirmation between phases.
 
 ### Phase B — Write the code (Mac-side)
 
-Done before Phase C because Phase C runs it. Mac can lint but not execute it.
+Done before Phase C because Phase C runs it. Mac can lint but not execute it. Broken into four sub-chunks; B.1 and B.2 run in parallel with AWS setup, B.3 and B.4 wait until the workstation exists.
 
-- `src/shared/zmq_protocol.py` — verify against the pinned Isaac-GR00T `gr00t/policy/server_client.py`, not from memory.
+#### B.1 — Trivial scaffolding batch ✅ (done 2026-05-16)
+
+Get the lint baseline up and remove low-risk 🟡 items in one pass.
+
+- `pyproject.toml` — `[tool.ruff]` only, target `py310`, line length `100`. No runtime deps; no build backend. Just enough for `ruff check .`.
+- `.env.example` — `NGC_API_KEY=`, `HF_TOKEN=`, `ACCEPT_EULA=Y`, `PRIVACY_CONSENT=Y`. Each with a one-line comment explaining where it gets used. Add a banner: "Copy to `.env` on the workstation; do not commit secrets."
+- `scripts/start_groot.sh` — `#!/usr/bin/env bash`, `set -euo pipefail`, `cd "$(dirname "$0")/.."`, `docker compose -f docker-compose.aws.yml up -d groot-server`. shellcheck-clean.
+- `scripts/pull_assets.sh` — same skeleton; calls `huggingface-cli download nvidia/GR00T-N1.7-3B --local-dir "$HF_CACHE"`. Reads `HF_CACHE` from env with a default.
+- `scripts/autorun.sh` — Isaac Automator boot hook. Sources `.env`, calls `start_groot.sh`. Must be idempotent (IA re-runs on every `./start`).
+- `src/__init__.py`, `src/shared/__init__.py`, `src/client/__init__.py`, `src/client/scenes/__init__.py` — empty.
+- Verification: `ruff check .` passes; `shellcheck scripts/*.sh` clean (install `shellcheck` if missing).
+
+#### B.2 — Wire protocol ✅ (done 2026-05-16)
+
+Highest-value chunk. Mirrors the pinned `gr00t/policy/server_client.py`; the Isaac client and the GR00T server have to agree on framing or every request fails.
+
+- Upstream snapshot frozen at `docs/references/upstream-server-client.py` (fetched from `https://raw.githubusercontent.com/NVIDIA/Isaac-GR00T/23ace64f17aa5015259b8609d371eb61a357c776/gr00t/policy/server_client.py`). Excluded from ruff via `extend-exclude` in `pyproject.toml` — it's a reference, not our code. Diff against it when bumping the Isaac-GR00T pin.
+- `src/shared/zmq_protocol.py` ships:
+  - `DEFAULT_MODEL_SERVER_PORT = 5555`, `DEFAULT_TIMEOUT_MS = 15000`.
+  - `MsgSerializer` with ext-type encoders/decoders for `np.ndarray` (`__ndarray_class__` / `as_npy` via `np.save`/`np.load(allow_pickle=False)`) and `__ModalityConfig_class__` decoded as dict passthrough (we don't reconstruct the dataclass on the client side).
+  - `PolicyClient(host, port=DEFAULT_MODEL_SERVER_PORT, timeout_ms, api_token)` with `ping()`, `get_action()`, `reset()`, `get_modality_config()`, `kill_server()`. `__enter__`/`__exit__`/`close()` for socket lifecycle; `_init_socket()` closes the old socket with `linger=0` before recreating so `context.term()` never hangs after a timeout.
+  - Two byte-for-byte gotchas worth flagging: upstream's `ping` handler returns `{"status": "ok", "message": "Server is running"}` (NOT the literal string `pong` — earlier notes were wrong); `get_action` returns a 2-list which we coerce to `tuple(response)` to match upstream's `_get_action` signature.
+- Tests: `tests/test_zmq_protocol.py` runs an in-process REP server in a thread and round-trips ndarray-bearing payloads, ModalityConfig dicts, server-error responses, and a no-listener timeout that exercises the socket-rebuild path. 7/7 pass under `pytest-timeout`.
+- Verification: `.venv/bin/python -m pytest tests/test_zmq_protocol.py -v --timeout=10` → 7 passed. `.venv/bin/ruff check .` clean.
+
+#### B.3 — GR00T container (deferred until after Phase A)
+
+Reason for deferral: the easiest way to validate the Dockerfile is `docker build` on the AWS workstation against a real GPU + the IA-installed nvidia-container-toolkit. Building locally under x86_64 emulation is slow (~30 min) and only proves the layers resolve, not that GR00T actually runs.
+
+- `docker/groot/Dockerfile` — `FROM nvcr.io/nvidia/pytorch:25.01-py3`; clone Isaac-GR00T at the pinned commit; `uv sync`; CMD launches `gr00t.eval.run_gr00t_server`.
+- `docker/groot/entrypoint.sh` — drives the server with env-driven knobs (port, model id).
+- `docker-compose.aws.yml` — single service, `--gpus all`, `-p 127.0.0.1:5555:5555`, volumes for HF cache + outputs.
+
+#### B.4 — Isaac-side scripts (deferred until paired with workstation)
+
+Reason for deferral: every `isaacsim.*` import is a guess until we can `~/IsaacSim/python.sh` the file. Writing speculatively front-loads rework. Better to draft against a live workstation where `python.sh -c "import isaacsim; help(isaacsim.X)"` is one command away.
+
 - `src/client/scenes/tabletop_panda.py` — Franka on a tabletop, isaacsim 5.0.0 APIs.
-- `src/client/run_inference.py` — `SimulationApp({...})` config, `--server-host 127.0.0.1` default, MP4 writer via `imageio` to `/workspace/outputs/`.
+- `src/client/run_inference.py` — `SimulationApp({...})` config, `--server-host 127.0.0.1` default, `imageio` MP4 writer.
 - `configs/tabletop_panda.yaml` — scene + rollout knobs.
-- `docker/groot/Dockerfile` + `entrypoint.sh` — NGC PyTorch base, clone Isaac-GR00T at the pinned commit, `uv sync`, launch `gr00t.eval.run_gr00t_server`.
-- `docker-compose.aws.yml` — one service, `--gpus all`, `-p 127.0.0.1:5555:5555`, volumes for HF cache + outputs.
-- `scripts/start_groot.sh`, `scripts/pull_assets.sh`, `scripts/autorun.sh` — thin.
-- `.env.example`, `pyproject.toml` (ruff only, py310, line length 100).
-- Lint on Mac: `ruff check .`. Syntax-check Isaac-importing files via `python -c "import ast; ast.parse(open('<path>').read())"` (can't import isaacsim on Mac).
 
 ### Phase C — GR00T container + headless rollout on the workstation
 
