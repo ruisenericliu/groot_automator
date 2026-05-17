@@ -85,7 +85,7 @@ docker run --rm -it -v $(pwd)/state:/root/state isaac_automator ./stop <deployme
     └── references/            ← archived setup guides and external pointers
 ```
 
-Things the active plan calls for that **don't exist yet**: `src/`, `configs/`, `docker/groot/`, `docker-compose.aws.yml`, `scripts/`, `.env.example`, `pyproject.toml`, `AWS_SETUP.md`. Don't be surprised when they're missing.
+Things the active plan calls for that **don't exist yet**: `src/`, `configs/`, `docker/groot/`, `docker-compose.aws.yml`, `scripts/`, `.env.example`, `pyproject.toml`. `AWS_SETUP.md` exists but the post-deploy details section is still `TBD` until the first successful deploy lands.
 
 ## Cost discipline
 

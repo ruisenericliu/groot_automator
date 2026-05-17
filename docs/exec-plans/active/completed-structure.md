@@ -10,7 +10,7 @@
 The repo currently exists in two layers:
 
 - **Docs scaffolding (done, uncommitted):** `CLAUDE.md`, `ARCHITECTURE.md`, a substantive `README.md`, and `docs/exec-plans/{active,completed}/`. All three top-level docs already describe the AWS + Isaac Automator design. The Runpod build was abandoned before bring-up; its two plans are preserved under `docs/exec-plans/completed/` as historical context.
-- **Code, configs, deployment glue (none of it written yet):** no `src/`, `configs/`, `docker/`, `scripts/`, `docker-compose.aws.yml`, `.env.example`, `pyproject.toml`, or `AWS_SETUP.md`.
+- **Code, configs, deployment glue (none of it written yet):** no `src/`, `configs/`, `docker/`, `scripts/`, `docker-compose.aws.yml`, `.env.example`, or `pyproject.toml`. `AWS_SETUP.md` exists (pre-deploy walkthrough) but its post-deploy details section is still `TBD`.
 
 The previous active plan (`aws-isaac-automator-migration.md`) was written when the working repo name was `runpod_isaac` / `groot_isaac`. This repo is `groot_automator`. The migration plan's phases are still substantively right, but its paths, its assumptions about pre-existing code (`src/shared/zmq_protocol.py`, `docker/groot/`, etc. — none of which actually exist), and its Phase E doc-cleanup (largely already done) need replacing.
 
@@ -38,7 +38,7 @@ groot_automator/
 ├── CLAUDE.md                              ✅ agent-first ToC; ≤ ~100 lines
 ├── ARCHITECTURE.md                        ✅ system map, pin table, wire protocol, layering
 ├── README.md                              ✅ quickstart for humans
-├── AWS_SETUP.md                           🟡 fills in after first successful ./deploy-aws
+├── AWS_SETUP.md                           ✅ pre-deploy walkthrough exists; post-deploy "values captured" section still TBD
 ├── LICENSE                                ✅
 ├── .env.example                           🟡 NGC_API_KEY, HF_TOKEN, ACCEPT_EULA=Y, PRIVACY_CONSENT=Y
 ├── pyproject.toml                         🟡 ruff config (py310 target, line length 100); no runtime deps

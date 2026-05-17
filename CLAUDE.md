@@ -39,7 +39,7 @@ We are intentionally following the OpenAI Codex "harness engineering" model: hum
     └── references/                         (empty placeholder)
 ```
 
-Files the active plan calls for but **do not exist yet**: `ARCHITECTURE.md`, `AWS_SETUP.md`, `src/`, `configs/`, `docker/groot/`, `docker-compose.aws.yml`, `scripts/start_groot.sh`, `.env.example`, `pyproject.toml`.
+Files the active plan calls for but **do not exist yet**: `src/`, `configs/`, `docker/groot/`, `docker-compose.aws.yml`, `scripts/start_groot.sh`, `.env.example`, `pyproject.toml`. The post-deploy details section of `AWS_SETUP.md` still has `TBD` placeholders until Phase A lands.
 
 ## Target architecture (delta only — full picture in the active plan)
 
