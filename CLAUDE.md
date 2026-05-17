@@ -52,7 +52,7 @@ Mac (dev machine)  --NoMachine TCP-->  AWS workstation VM (Isaac Automator-provi
 ```
 
 - **Isaac Sim native, GR00T containerized** — Isaac stays native so NoMachine sees its GUI; GR00T stays in its NGC PyTorch image because its dep tree is tightly pinned and it needs no GUI.
-- **Single GPU host.** Default `g5.2xlarge` (A10G 24 GB); `g6e.xlarge` (L40S 48 GB) for headroom. Multi-GPU is out of scope.
+- **Single GPU host.** Default `g6e.2xlarge` (L40S, 48 GB) — matches Isaac Automator's upstream default and is AWS's closest data-center sibling to the RTX 6000 Ada. `g5.2xlarge` (A10G, 24 GB) is the cheaper fallback. Multi-GPU is out of scope.
 - **Localhost ZMQ.** Isaac talks to GR00T at `127.0.0.1:5555`. No compose bridge network in the new design.
 
 ## Pinned versions (canonical; mirror in `ARCHITECTURE.md` once it exists)
@@ -60,8 +60,8 @@ Mac (dev machine)  --NoMachine TCP-->  AWS workstation VM (Isaac Automator-provi
 | Component | Pin |
 |---|---|
 | Isaac Sim | `5.0.0` (native install via Isaac Automator) |
-| Isaac Automator commit | TBD — record on first successful `./deploy-aws` |
-| AWS instance | `g5.2xlarge` default |
+| Isaac Automator commit | `685bc29e677714a7f0f72131e2d30eb9b9db2ce7` (2026-05-14; first commit with the NoMachine install fix) |
+| AWS instance | `g6e.2xlarge` (L40S, 48 GB) default; `g5.2xlarge` (A10G, 24 GB) cheaper fallback |
 | GR00T base image | `nvcr.io/nvidia/pytorch:25.01-py3` |
 | Isaac-GR00T commit | `23ace64f17aa5015259b8609d371eb61a357c776` (`n1.7-release`) |
 | HF model repo | `nvidia/GR00T-N1.7-3B` |
@@ -77,7 +77,7 @@ There are no project-specific build, lint, or test commands yet — the code has
 End-to-end runs happen **on the AWS workstation**, not on the Mac:
 
 - `./deploy-aws --isaaclab no --isaaclab-arena no` (from inside the locally-built `isaac_automator` Docker image) — provision the workstation.
-- `./connect <deployment-name>` / `./start` / `./stop` / `./destroy` — Isaac Automator lifecycle.
+- `./ssh <deployment-name>` (shell on the workstation) / `./novnc <deployment-name>` (browser viewer) / `./start` / `./stop` / `./destroy` — Isaac Automator lifecycle. NoMachine is reached from the Mac NoMachine client using the IP and port in `state/<deployment-name>/info.txt`.
 - `docker compose -f docker-compose.aws.yml up -d groot-server` — on the workstation, after `git clone`ing this repo there.
 - `~/IsaacSim/python.sh src/client/run_inference.py --server-host 127.0.0.1` — the headless rollout entry point (writes MP4 to `/workspace/outputs/`).
 

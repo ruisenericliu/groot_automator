@@ -22,7 +22,7 @@ Upstream Isaac Automator handles the AWS lifecycle (Terraform + Ansible, NoMachi
 - Docker Desktop (for building/running the Isaac Automator deployer container locally).
 - An [NVIDIA NGC](https://ngc.nvidia.com/) account + API key (`NGC_API_KEY`) — needed for the GR00T base image and Isaac Sim assets.
 - A [Hugging Face](https://huggingface.co/) account + token (`HF_TOKEN`) with access accepted for [`nvidia/GR00T-N1.7-3B`](https://huggingface.co/nvidia/GR00T-N1.7-3B).
-- An AWS account with IAM credentials and quota for a `g5.2xlarge` (or `g6e.xlarge`) in your region of choice. Isaac Automator reads `~/.aws/credentials`.
+- An AWS account whose IAM principal has `AmazonEC2FullAccess` (plus quota for a `g6e.2xlarge` (L40S, 48 GB — upstream IA default) in your region of choice; `g5.2xlarge` (A10G) is the cheaper fallback). Isaac Automator prompts for AWS credentials interactively the first time you run `./deploy-aws` and stores them inside its `state/` directory — it does **not** read `~/.aws/credentials` from the host.
 - The [NoMachine client for macOS](https://www.nomachine.com/download).
 - An SSH keypair you're comfortable handing to AWS instances.
 
@@ -33,16 +33,14 @@ Upstream Isaac Automator handles the AWS lifecycle (Terraform + Ansible, NoMachi
 The pieces marked _(not yet wired)_ are still to come — they're in the active plan.
 
 ```bash
-# 1. Clone Isaac Automator and build its deployer image (one-time, on the Mac).
+# 1. Clone Isaac Automator at the pinned commit and build its deployer image (one-time, on the Mac).
 git clone https://github.com/isaac-sim/IsaacAutomator
 cd IsaacAutomator
-docker build -t isaac_automator .
+git checkout 685bc29e677714a7f0f72131e2d30eb9b9db2ce7   # see ARCHITECTURE.md pin table
+./build                                                 # equivalent to `docker build -t isaac_automator .`
 
-# 2. Deploy a minimal Isaac-Sim-only workstation on AWS.
-docker run --rm -it \
-  -v ~/.aws:/root/.aws \
-  -v $(pwd)/state:/root/state \
-  isaac_automator ./deploy-aws --isaaclab no --isaaclab-arena no
+# 2. Deploy a minimal Isaac-Sim-only workstation on AWS (g6e.2xlarge / L40S, us-east-1 by default).
+./run ./deploy-aws --isaaclab no --isaaclab-arena no
 
 #    Capture the deployment name, public IP, NoMachine port from state/<name>/info.txt.
 
@@ -50,7 +48,7 @@ docker run --rm -it \
 #    (NoMachine client on the Mac → enter the IP + port from info.txt.)
 
 # 4. SSH into the workstation and bring up GR00T.
-docker run --rm -it -v $(pwd)/state:/root/state isaac_automator ./connect <deployment-name>
+./run ./ssh <deployment-name>
 # now on the workstation:
 git clone <this-repo> ~/workspace/groot_automator && cd ~/workspace/groot_automator
 cp .env.example .env   # paste NGC_API_KEY, HF_TOKEN          # (not yet wired)
@@ -91,7 +89,7 @@ Things the active plan calls for that **don't exist yet**: `src/`, `configs/`, `
 
 ## Cost discipline
 
-There is no autoscaler and no budget alarm. A `g5.2xlarge` running 24/7 is in the low hundreds of dollars per month; an L40S box is more. The only knob is `./stop <deployment-name>` when you're not actively using the workstation. EBS storage keeps billing while stopped (single-digit dollars/month for a working set), which is what lets `./start` come back without re-downloading the model or recompiling shaders.
+There is no autoscaler and no budget alarm. A `g6e.2xlarge` (L40S, the default) running 24/7 is on the order of a few hundred dollars per month on-demand; the cheaper `g5.2xlarge` (A10G) fallback is roughly half that. The only knob is `./stop <deployment-name>` when you're not actively using the workstation. EBS storage keeps billing while stopped (single-digit dollars/month for a working set), which is what lets `./start` come back without re-downloading the model or recompiling shaders.
 
 ## A note on what success looks like in Phase 1
 

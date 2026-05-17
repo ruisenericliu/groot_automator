@@ -79,7 +79,7 @@ groot_automator/
 
 Canonical home: `ARCHITECTURE.md`. Summary only:
 
-- **Single AWS workstation**, Isaac-Automator-provisioned. Default `g5.2xlarge` (A10G 24 GB); `g6e.xlarge` (L40S 48 GB) for headroom.
+- **Single AWS workstation**, Isaac-Automator-provisioned. Default `g6e.2xlarge` (L40S, 48 GB) — matches IA upstream and is the closest EC2 sibling to the RTX 6000 Ada. `g5.2xlarge` (A10G, 24 GB) is the cheaper fallback.
 - **Isaac Sim 5.0.0 native** under `~/IsaacSim/` (so NoMachine can see its GUI).
 - **GR00T containerized** (NGC PyTorch 25.01-py3 + Isaac-GR00T @ pinned commit), bound to `127.0.0.1:5555`.
 - **Wire protocol:** ZMQ REQ/REP over TCP, msgpack with the `__ndarray_class__` extension. `src/shared/zmq_protocol.py` must match the pinned Isaac-GR00T commit byte-for-byte.
@@ -115,12 +115,11 @@ The user wants pause-for-confirmation between phases.
 
 ### Phase A — Isaac Automator dry-run on AWS
 
-- On Mac: `git clone https://github.com/isaac-sim/IsaacAutomator && docker build -t isaac_automator .`
-- Mount AWS credentials (`~/.aws/credentials`) into the IA container.
-- `./deploy-aws --isaaclab no --isaaclab-arena no`, default `g5.2xlarge`, user-picked region.
-- Connect via NoMachine (Mac client); confirm Isaac Sim editor opens.
-- `./stop <name>` then `./start <name>` — confirm pause/resume.
-- Write `AWS_SETUP.md` capturing install path, NoMachine port, noVNC URL, the Isaac Automator commit SHA used. Pin that commit SHA in `ARCHITECTURE.md`.
+- On Mac: `git clone https://github.com/isaac-sim/IsaacAutomator && cd IsaacAutomator && git checkout 685bc29e677714a7f0f72131e2d30eb9b9db2ce7 && ./build`. (The pinned SHA is the first commit after the NoMachine install fix; recorded in `ARCHITECTURE.md`.)
+- `./run ./deploy-aws --isaaclab no --isaaclab-arena no` — IA prompts for AWS creds the first time and stores them in `state/`; no `~/.aws` mount needed. Default instance `g6e.2xlarge`, default region `us-east-1`. Override with `--ec2-instance-type` only if cost forces it.
+- Connect via NoMachine from the Mac NoMachine client using the IP + port in `state/<name>/info.txt`. Confirm Isaac Sim editor opens.
+- `./run ./stop <name>` then `./run ./start <name>` — confirm pause/resume.
+- Write `AWS_SETUP.md` capturing install path, NoMachine port, noVNC URL, and any deltas vs the IA README we hit.
 
 ### Phase B — Write the code (Mac-side)
 
@@ -138,7 +137,7 @@ Done before Phase C because Phase C runs it. Mac can lint but not execute it.
 
 ### Phase C — GR00T container + headless rollout on the workstation
 
-- `./connect <deployment-name>` from the IA container; on the workstation: `git clone <this-repo> ~/workspace/groot_automator && cd ~/workspace/groot_automator`.
+- `./run ./ssh <deployment-name>` from the IA repo on the Mac; on the workstation: `git clone <this-repo> ~/workspace/groot_automator && cd ~/workspace/groot_automator`.
 - `cp .env.example .env` and fill `NGC_API_KEY`, `HF_TOKEN`.
 - `docker compose -f docker-compose.aws.yml up -d groot-server`. Watch `docker compose logs -f groot-server`; expect model loaded in 30–60 s on subsequent runs.
 - Sanity: `python -c "from src.shared.zmq_protocol import PolicyClient; print(PolicyClient('127.0.0.1').ping())"` → `pong`.

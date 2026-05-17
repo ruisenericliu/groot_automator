@@ -16,7 +16,7 @@ For the current in-flight plan, see [`docs/exec-plans/active/completed-structure
 │    Docker image (local)  │                                    │  │   run_inference.py ──┐              │  │
 │      ./deploy-aws        │                                    │  └──────────────────────┼──────────────┘  │
 │      ./start  ./stop     │                                    │                         │  localhost:5555  │
-│      ./connect           │                                    │                         ▼  (ZMQ REQ/REP)   │
+│      ./ssh / ./novnc     │                                    │                         ▼  (ZMQ REQ/REP)   │
 │      ./destroy           │                                    │  ┌─────────────────────────────────────┐  │
 │                          │                                    │  │ groot-server (docker)               │  │
 │                          │                                    │  │   nvcr.io/nvidia/pytorch:25.01-py3  │  │
@@ -43,8 +43,8 @@ This table is the source of truth. Anywhere else (plans, READMEs, comments) that
 | Component | Pin | Source / notes |
 |---|---|---|
 | Isaac Sim | `5.0.0` | Installed natively by Isaac Automator under `~/IsaacSim/`. |
-| Isaac Automator commit | TBD — record on first successful `./deploy-aws` | Pin once a deploy lands; capture in this row and in the active plan. |
-| AWS instance (default) | `g5.2xlarge` (A10G, 24 GB) | `g6e.xlarge` (L40S, 48 GB) is the headroom option. |
+| Isaac Automator commit | `685bc29e677714a7f0f72131e2d30eb9b9db2ce7` (2026-05-14) | First main commit after the NoMachine install fix landed; clone with `--detach` to this SHA. Re-pin only after a verified deploy on a newer SHA. |
+| AWS instance (default) | `g6e.2xlarge` (L40S, 48 GB) | Matches Isaac Automator's upstream default; closest EC2 sibling to the RTX 6000 Ada (no RTX 4090/6000 EC2 instances exist). `g5.2xlarge` (A10G, 24 GB) is the cheaper fallback at the cost of headroom. |
 | AWS region | User's choice | No region-locked assumptions in code. |
 | GR00T base image | `nvcr.io/nvidia/pytorch:25.01-py3` | Provides CUDA 12.8 / Python 3.10. Confirm tag at build time. |
 | Isaac-GR00T | `23ace64f17aa5015259b8609d371eb61a357c776` (tag `n1.7-release`) | https://github.com/NVIDIA/Isaac-GR00T |
